@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Airfoil Self-Noise · Linear Regression Explorer</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 36 24">
+          <path d="M1 12h5l3-8 4 16 4-20 4 12h4l3-6 3 6h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <div class="brand-copy">
+        <p class="eyebrow">Aeroacoustics / OLS baseline</p>
+        <h1>Airfoil Self-Noise Explorer</h1>
+      </div>
+    </div>
+    <div class="header-meta">
+      <span class="chip"><span class="chip-dot"></span><span id="chip-rows">1,503</span> wind-tunnel runs</span>
+      <span class="chip chip-ghost">UCI · CC BY 4.0</span>
+    </div>
+  </header>
+
+  <div class="tabs-wrap">
+    <nav class="tabs" role="tablist" aria-label="Explorer sections">
+      <button id="tab-predict" class="tab is-active" role="tab" aria-selected="true" aria-controls="panel-predict" tabindex="0">Predict</button>
+      <button id="tab-model" class="tab" role="tab" aria-selected="false" aria-controls="panel-model" tabindex="-1">Model</button>
+      <button id="tab-insights" class="tab" role="tab" aria-selected="false" aria-controls="panel-insights" tabindex="-1">Insights</button>
+      <button id="tab-data" class="tab" role="tab" aria-selected="false" aria-controls="panel-data" tabindex="-1">Data &amp; cleaning</button>
+    </nav>
+  </div>
+
+  <main>
+    <section id="panel-predict" class="panel is-active" role="tabpanel" aria-labelledby="tab-predict">
+      <div class="panel-head">
+        <div>
+          <p class="section-kicker">Interactive estimate</p>
+          <h2>Predict scaled sound pressure level</h2>
+        </div>
+        <p class="panel-note">OLS on 5 standardised features · seed 42</p>
+      </div>
+
+      <div class="predict-layout">
+        <div class="card inputs-card">
+          <div class="card-head">
+            <h3>Flight conditions</h3>
+            <button id="reset" class="ghost-btn" type="button">Reset to means</button>
+          </div>
+          <div id="sliders" class="sliders"></div>
+          <p class="hint">Inputs are clamped to the observed dataset range. Moving a slider updates the estimate and the sensitivity curve instantly.</p>
+        </div>
+
+        <div class="card result-card">
+          <p class="stat-label">Predicted SPL</p>
+          <p class="prediction" aria-live="polite"><span id="prediction-value">—</span><span class="prediction-unit">dB</span></p>
+          <p class="result-sub"><span id="prediction-delta">—</span><span id="prediction-band">—</span></p>
+          <div class="meter" aria-hidden="true">
+            <div class="meter-track"><span id="meter-marker" class="meter-marker"></span></div>
+            <div class="meter-labels"><span id="meter-min">—</span><span>observed SPL</span><span id="meter-max">—</span></div>
+          </div>
+          <p class="formula">ŷ = β₀ + Σ βᵢ zᵢ, where zᵢ = (xᵢ − μᵢ) / σᵢ</p>
+        </div>
+
+        <div class="card chart-card">
+          <div class="card-head">
+            <h3>What-if sensitivity</h3>
+            <label class="select-wrap" for="sensitivity-feature">Vary
+              <select id="sensitivity-feature"></select>
+            </label>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="sensitivity" role="img" aria-label="Sensitivity of predicted SPL to one feature"></canvas>
+          </div>
+          <p class="hint" id="sensitivity-caption">—</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-model" class="panel" role="tabpanel" aria-labelledby="tab-model" hidden>
+      <div class="panel-head">
+        <div>
+          <p class="section-kicker">Held-out performance</p>
+          <h2>Model report</h2>
+        </div>
+        <p class="panel-note">80/20 split · 5-fold cross-validation</p>
+      </div>
+
+      <div class="stat-grid">
+        <article class="card stat">
+          <span class="stat-label">Test R²</span>
+          <span class="stat-value" id="stat-r2">—</span>
+          <span class="stat-note">variance explained on the 20% hold-out</span>
+        </article>
+        <article class="card stat">
+          <span class="stat-label">RMSE</span>
+          <span class="stat-value"><span id="stat-rmse">—</span><small> dB</small></span>
+          <span class="stat-note">root mean squared error</span>
+        </article>
+        <article class="card stat">
+          <span class="stat-label">MAE</span>
+          <span class="stat-value"><span id="stat-mae">—</span><small> dB</small></span>
+          <span class="stat-note">mean absolute error</span>
+        </article>
+        <article class="card stat">
+          <span class="stat-label">CV R²</span>
+          <span class="stat-value" id="stat-cv">—</span>
+          <span class="stat-note">5-fold mean ± standard deviation</span>
+        </article>
+      </div>
+
+      <div class="split-grid">
+        <div class="card figure-card">
+          <h3>Coefficient effects</h3>
+          <img src="assets/figures/coefficients.png" alt="Bar chart of standardised OLS coefficients">
+        </div>
+        <div class="card figure-card">
+          <h3>Regularisation check</h3>
+          <img src="assets/figures/model_comparison.png" alt="Bar charts comparing OLS, Ridge and Lasso metrics">
+        </div>
+      </div>
+
+      <div class="split-grid">
+        <div class="card">
+          <h3>Standardised coefficients</h3>
+          <p class="hint">Change in SPL for a one-standard-deviation increase, holding the other inputs fixed.</p>
+          <div class="table-wrap">
+            <table class="data-table" id="coef-table">
+              <thead><tr><th>Feature</th><th class="num">Δ SPL (dB)</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Model comparison</h3>
+          <div class="table-wrap">
+            <table class="data-table" id="comparison-table">
+              <thead><tr><th>Model</th><th class="num">α</th><th class="num">R²</th><th class="num">RMSE</th><th class="num">MAE</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="hint" id="comparison-note">—</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <div>
+          <p class="section-kicker">Feature engineering aside</p>
+          <h3>Does log(frequency) help?</h3>
+        </div>
+        <p id="log-note">—</p>
+      </div>
+    </section>
+
+    <section id="panel-insights" class="panel" role="tabpanel" aria-labelledby="tab-insights" hidden>
+      <div class="panel-head">
+        <div>
+          <p class="section-kicker">Exploration</p>
+          <h2>Signals and residuals</h2>
+        </div>
+        <p class="panel-note">Generated from the cleaned dataset</p>
+      </div>
+
+      <div class="gallery">
+        <figure class="card figure-card wide">
+          <img src="assets/figures/feature_vs_target.png" alt="Scatter plots of each input against scaled sound pressure level">
+          <figcaption><strong>Input vs. target.</strong> Frequency is plotted on a log axis. SPL rises with velocity and falls with frequency and chord length; angle of attack shows a curved, non-monotonic pattern that a linear term can only approximate.</figcaption>
+        </figure>
+        <figure class="card figure-card">
+          <img src="assets/figures/correlation_heatmap.png" alt="Pearson correlation heatmap of inputs and target">
+          <figcaption><strong>Correlation structure.</strong> Frequency is the strongest linear correlate of SPL. Angle of attack and displacement thickness are correlated (r ≈ 0.75), but with five features and over 1,200 training rows there is little variance for shrinkage to remove.</figcaption>
+        </figure>
+        <figure class="card figure-card">
+          <img src="assets/figures/actual_vs_predicted.png" alt="Actual versus predicted SPL scatter plot">
+          <figcaption><strong>Held-out predictions.</strong> Points cluster around the identity line, with visible spread and compression at the extremes.</figcaption>
+        </figure>
+        <figure class="card figure-card">
+          <img src="assets/figures/residuals_vs_fitted.png" alt="Residuals versus fitted values">
+          <figcaption><strong>Residuals vs. fitted.</strong> Curvature and a fan-shaped spread show that variance is not constant and some structure remains unmodelled.</figcaption>
+        </figure>
+        <figure class="card figure-card">
+          <img src="assets/figures/residual_distribution.png" alt="Residual histogram and normal Q-Q plot">
+          <figcaption><strong>Residual distribution.</strong> Tails deviate from the normal reference, so interval estimates from linear regression would be optimistic at the extremes.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="panel-data" class="panel" role="tabpanel" aria-labelledby="tab-data" hidden>
+      <div class="panel-head">
+        <div>
+          <p class="section-kicker">Dataset hygiene</p>
+          <h2>Cleaning log and preview</h2>
+        </div>
+        <p class="panel-note">Validate → range-check → deduplicate</p>
+      </div>
+
+      <div class="stat-grid cleaning-grid">
+        <article class="card stat"><span class="stat-label">Raw rows</span><span class="stat-value" id="clean-raw">—</span></article>
+        <article class="card stat"><span class="stat-label">Duplicates removed</span><span class="stat-value" id="clean-dupes">—</span></article>
+        <article class="card stat"><span class="stat-label">Invalid / missing</span><span class="stat-value" id="clean-invalid">—</span></article>
+        <article class="card stat"><span class="stat-label">Final rows</span><span class="stat-value" id="clean-final">—</span></article>
+      </div>
+
+      <div class="split-grid">
+        <div class="card">
+          <h3>Cleaning policy</h3>
+          <ol class="policy-list">
+            <li><strong>Coerce</strong> every column to numeric; non-numeric values count as invalid.</li>
+            <li><strong>Range-check</strong> against broad physical bounds (for example, frequency 1–100,000 Hz and SPL 60–180 dB).</li>
+            <li><strong>Drop duplicates</strong> keeping the first occurrence.</li>
+            <li><strong>No trimming</strong>: valid extreme runs are retained to preserve the aerodynamic envelope.</li>
+          </ol>
+        </div>
+        <div class="card">
+          <h3>Source</h3>
+          <p class="hint">UCI Machine Learning Repository — <em>Airfoil Self-Noise</em> (ID 291). NASA wind-tunnel measurements published by Brooks, Pope and Marcolini. Distributed under CC BY 4.0.</p>
+          <p class="hint"><a href="https://archive.ics.uci.edu/dataset/291/airfoil+self+noise" target="_blank" rel="noopener noreferrer">Open the dataset page</a></p>
+          <p class="hint">Reproducible build: <code>uv run airfoil-run</code> · <span id="meta-seed">seed 42</span></p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>First 12 cleaned rows</h3>
+        <p class="hint scroll-hint">Scroll sideways to see all six columns.</p>
+        <div class="table-wrap preview-wrap">
+          <table class="data-table" id="preview-table">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>Static demo — predictions run in the browser from exported OLS coefficients. No server, no tracking.</p>
+    <p>Dataset: UCI Airfoil Self-Noise · CC BY 4.0 · Built with scikit-learn &amp; uv</p>
+  </footer>
+
+  <script defer src="model-data.js"></script>
+  <script defer src="app.js"></script>
+</body>
+</html>
